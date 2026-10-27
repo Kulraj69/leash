@@ -32,6 +32,7 @@ import type { AccountView } from "@/lib/near";
 import type { LeaderboardEntry } from "@/lib/store";
 import { NightScene } from "./night-scene";
 import { Receipt, type WireReceipt } from "./receipt";
+import { BaseVault } from "./base-vault";
 
 const tabs = [
   { name: "Policy Lab", icon: FlaskConical },
@@ -244,6 +245,7 @@ function SectionTitle({
 }
 
 export function LeashApp({ live, nebius }: { live: boolean; nebius: boolean }) {
+  const [chain, setChain] = useState<"near" | "base">("near");
   const [tab, setTab] = useState(0);
   const [text, setText] = useState(PRESETS[0].text);
   const [preset, setPreset] = useState(0);
@@ -296,7 +298,7 @@ export function LeashApp({ live, nebius }: { live: boolean; nebius: boolean }) {
           <div className="header-note">
             A SPENDING FIREWALL
             <br />
-            <span>FOR AI AGENTS ON NEAR</span>
+            <span>FOR AI AGENTS ON {chain === "near" ? "NEAR" : "BASE"}</span>
           </div>
           <div className="edition">
             PERSONAL SECURITY SYSTEM
@@ -327,52 +329,76 @@ export function LeashApp({ live, nebius }: { live: boolean; nebius: boolean }) {
                   <i /> LEASH OS <b>v1.0</b>
                 </span>
                 <span className="mode-badge">
-                  {live ? "Live RPC · view only" : "Demo mode: synthetic data"}
+                  {chain === "base"
+                    ? "Base vault · view only"
+                    : live
+                      ? "Live RPC · view only"
+                      : "Demo mode: synthetic data"}
                 </span>
                 <span className="system-clock">
-                  NEAR / {live ? "RPC" : "TESTNET DEMO"}
+                  {chain === "base"
+                    ? "BASE / SEPOLIA"
+                    : `NEAR / ${live ? "RPC" : "TESTNET DEMO"}`}
                 </span>
               </div>
-              <nav
-                className="tabs"
-                aria-label="Terminal applications"
-                role="tablist"
-              >
-                {tabs.map(({ name, icon: Icon }, i) => (
-                  <button
-                    key={name}
-                    id={`tab-${i}`}
-                    role="tab"
-                    aria-selected={tab === i}
-                    aria-controls={`panel-${i}`}
-                    tabIndex={tab === i ? 0 : -1}
-                    onKeyDown={(event) => {
-                      const next =
-                        event.key === "ArrowRight"
-                          ? (i + 1) % 4
-                          : event.key === "ArrowLeft"
-                            ? (i + 3) % 4
-                            : event.key === "Home"
-                              ? 0
-                              : event.key === "End"
-                                ? 3
-                                : null;
-                      if (next !== null) {
-                        event.preventDefault();
-                        chooseTab(next);
-                        document.getElementById(`tab-${next}`)?.focus();
-                      }
-                    }}
-                    onClick={() => chooseTab(i)}
-                  >
-                    <span className="tab-number">0{i + 1}</span>
-                    <Icon size={15} />
-                    <span>{name}</span>
-                  </button>
-                ))}
-              </nav>
+              <div className="chain-selector">
+                <label htmlFor="chain">Network</label>
+                <select
+                  id="chain"
+                  value={chain}
+                  onChange={(e) => {
+                    setChain(e.target.value as "near" | "base");
+                    setError("");
+                    setNotice("");
+                  }}
+                >
+                  <option value="near">NEAR testnet</option>
+                  <option value="base">Base Sepolia</option>
+                </select>
+              </div>
+              {chain === "near" && (
+                <nav
+                  className="tabs"
+                  aria-label="Terminal applications"
+                  role="tablist"
+                >
+                  {tabs.map(({ name, icon: Icon }, i) => (
+                    <button
+                      key={name}
+                      id={`tab-${i}`}
+                      role="tab"
+                      aria-selected={tab === i}
+                      aria-controls={`panel-${i}`}
+                      tabIndex={tab === i ? 0 : -1}
+                      onKeyDown={(event) => {
+                        const next =
+                          event.key === "ArrowRight"
+                            ? (i + 1) % 4
+                            : event.key === "ArrowLeft"
+                              ? (i + 3) % 4
+                              : event.key === "Home"
+                                ? 0
+                                : event.key === "End"
+                                  ? 3
+                                  : null;
+                        if (next !== null) {
+                          event.preventDefault();
+                          chooseTab(next);
+                          document.getElementById(`tab-${next}`)?.focus();
+                        }
+                      }}
+                      onClick={() => chooseTab(i)}
+                    >
+                      <span className="tab-number">0{i + 1}</span>
+                      <Icon size={15} />
+                      <span>{name}</span>
+                    </button>
+                  ))}
+                </nav>
+              )}
               <div
                 className="screen-content"
+                hidden={chain !== "near"}
                 role="tabpanel"
                 id={`panel-${tab}`}
                 aria-labelledby={`tab-${tab}`}
@@ -602,12 +628,18 @@ export function LeashApp({ live, nebius }: { live: boolean; nebius: boolean }) {
                   </div>
                 )}
               </div>
+              {chain === "base" && (
+                <div className="screen-content">
+                  <BaseVault />
+                </div>
+              )}
               <div className="screen-status">
                 <span>
                   <LockKeyhole size={12} /> VIEW ONLY. NO KEYS. NO TRANSACTIONS.
                 </span>
                 <button
                   type="button"
+                  hidden={chain !== "near"}
                   onClick={() => {
                     newSession();
                     setSessionVersion((v) => v + 1);

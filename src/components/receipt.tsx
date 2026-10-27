@@ -2,15 +2,22 @@
 import type { CSSProperties } from "react";
 import type { Evaluation } from "@/lib/firewall";
 import { formatNear } from "@/lib/policy";
+import { formatEth } from "@/lib/base-values";
 export type WireReceipt = Omit<Evaluation, "remainingBudget"> & {
   remainingBudget: string | null;
 };
 export function Receipt({
   result,
   sequence = 1,
+  currency = "NEAR",
+  footer = "SIMULATION ONLY · NO FUNDS MOVE",
+  budgetLabel = "BUDGET REMAINING",
 }: {
   result: WireReceipt | null;
   sequence?: number;
+  currency?: "NEAR" | "ETH";
+  footer?: string;
+  budgetLabel?: string;
 }) {
   return (
     <section
@@ -39,11 +46,13 @@ export function Receipt({
             ))}
           </div>
           <div className="receipt-total">
-            <span>BUDGET REMAINING</span>
+            <span>{budgetLabel}</span>
             <strong>
               {result.remainingBudget === null
                 ? "UNBOUNDED"
-                : `${formatNear(BigInt(result.remainingBudget))} N`}
+                : currency === "ETH"
+                  ? `${formatEth(BigInt(result.remainingBudget))} ETH`
+                  : `${formatNear(BigInt(result.remainingBudget))} N`}
             </strong>
           </div>
         </div>
@@ -63,7 +72,7 @@ export function Receipt({
           </div>
         </div>
       )}
-      <div className="receipt-bottom">SIMULATION ONLY · NO FUNDS MOVE</div>
+      <div className="receipt-bottom">{footer}</div>
     </section>
   );
 }
