@@ -16,3 +16,6 @@ near-credentials/
 shots/
 PLAN.md
 TASK.md
+contracts/lib/
+contracts/out/
+contracts/cache/

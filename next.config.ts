@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
   allowedDevOrigins: ["localhost", "127.0.0.1"],
+  outputFileTracingExcludes: { "/*": ["./contracts/**/*"] },
   turbopack: {
     rules: { "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" } },
   },
