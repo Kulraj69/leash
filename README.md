@@ -1,10 +1,10 @@
 # Leash / LEASH 5150
 
-A spending-firewall simulator for AI agents that hold NEAR. A deterministic policy engine checks each proposed action and returns **ALLOW**, **ASK_HUMAN**, or **BLOCK**, with a readable receipt. A deliberately gullible shopping agent demonstrates why an agent's instructions are not an authorization boundary.
+A spending firewall for AI agents: simulated NEAR spending and a Solidity ETH vault for Base Sepolia. Deterministic policies return **ALLOW**, **ASK_HUMAN**, or **BLOCK**, with a readable receipt. A deliberately gullible shopping agent demonstrates why an agent's instructions are not an authorization boundary.
 
 **Built at NEAR HACKATHON.** Tracks: `security`, `agents`, `games`.
 
-This is a local/serverless hackathon prototype, not a deployed wallet or an on-chain security product. All spending is simulated. The only live blockchain operations available are public, view-only NEAR RPC queries.
+This is a local/serverless hackathon prototype. The NEAR flows remain simulated. The Base vault can enforce spending rules on-chain after a human deploys and funds it; no deployment is included here. The web app only reads public NEAR/Base state and previews decisions. It never signs or sends transactions.
 
 ## Run
 
@@ -93,6 +93,76 @@ The CLI output is a human-run **template** with `YOUR_ACCOUNT.testnet` and `YOUR
 
 References: [NEAR CLI](https://docs.near.org/tools/cli), [NEAR access keys](https://docs.near.org/protocol/access-keys), [NEAR RPC](https://docs.near.org/api/rpc/introduction), [NEAR Intents docs](https://docs.near-intents.org/).
 
+## Base (Sepolia)
+
+**Contract: `<ADDRESS>`** — placeholder for a future deployment on chain **84532**. Explorer: `https://sepolia.basescan.org/address/<ADDRESS>`. No contract was deployed or funded as part of this change.
+
+Choose **Base Sepolia** in the Network selector. NEAR testnet remains the default, and switching back preserves the NEAR lab/game session. The Base screen shows the vault address, owner, agent, policy, ETH balance, today's spend and rolling-hour action count. **Preview a payment on-chain** calls `check(address,uint256,bytes4)` through `eth_call`, with selector zero for a native ETH payment. The resulting receipt does not debit a budget, queue an approval, emit an on-chain event, or send a transaction. A preview describes one block's state; execution may later encounter changed rules/state or a reverting recipient.
+
+With no address configured, the Base screen explicitly says **Not deployed** and uses a **mock-vault** fixture. Its balance is a synthetic 0.001 ETH, its spent amount/action count stay at zero, and its previews make no RPC calls. Try 0.00001 ETH for ALLOW, 0.00004 ETH for ASK_HUMAN, and 0.00006 ETH for BLOCK / `PER_TX_CAP` using the prefilled coffee address. Configuring an address enables live reads; a wrong network, missing contract or RPC failure is an error, never a substitute mock result.
+
+### Contract and tests
+
+`contracts/src/LeashVault.sol` uses Solidity 0.8.24, with no contract dependencies. `forge-std` is only used for tests and the human-run deployment script. From the repository root:
+
+```sh
+export PATH="$HOME/.foundry/bin:$PATH"
+cd contracts
+forge install foundry-rs/forge-std@bd8c87087369377df8b451de74fb3a4fa9a7f577 --no-git
+forge build
+forge test -vv
+cd ..
+```
+
+The pinned dependency is installed inside `contracts/lib/`, which is ignored along with `contracts/out/` and `contracts/cache/`. There are no Git submodules and the web build needs no Foundry install. TypeScript, ESLint, Vitest and Next.js output tracing exclude the contract project. Broadcast records are not blanket-ignored; a future `contracts/broadcast/*/84532/run-latest.json` can be committed after a real deployment.
+
+The Foundry suite has **29 tests**, including a **256-run fuzz test** asserting that successful payments and approvals never exceed the daily cap across day rollover. It also covers every reason code, rolling-hour expiry, IST boundaries, overnight hours, approvals/rejections, selector restrictions, authorization, pause/recovery, recipient failures, reentrancy and deployment defaults/overrides in a local test VM. None of these tests broadcasts transactions.
+
+### Human-run deployment template
+
+The following command **would deploy** and configure a vault on Base Sepolia. Run it yourself from the repository root when ready; `KEY` belongs in your own shell for Foundry, never in the web app's environment or browser.
+
+```sh
+export PATH="$HOME/.foundry/bin:$PATH"
+# Optional: export AGENT_ADDRESS=0x...   # defaults to the deployer
+# Optional: export FUND_WEI=0           # default; initial ETH in exact wei
+forge script contracts/script/Deploy.s.sol \
+  --rpc-url https://sepolia.base.org --broadcast --private-key "$KEY" \
+  --root "$PWD/contracts"
+```
+
+The deployer becomes the immutable owner. The script applies a Daily essentials policy: **0.0002 ETH/day**, **0.00005 ETH/payment**, human review **above 0.00003 ETH**, **5 successful actions per rolling hour**, offset **+330 minutes (IST)**. Start/end are both zero, so active-hour restrictions are disabled. To use 09:00–21:00 IST, the owner can set start/end to 540/1260 through `setPolicy`.
+
+The script allowlists these exact addresses, derived from the low 160 bits of `keccak256("coffee")` and `keccak256("weather")`:
+
+- Coffee: `0x3bd349193d64331371ae5d047e0f91db989e8e35`
+- Weather: `0x6f2e2f1380aa176569b6c84f16d7f2ced5965666`
+
+These are deterministic demo placeholders, not services or accounts with known private keys. Replace the receiver configuration for meaningful use. The default initial funding is zero. After deploying, fill `<ADDRESS>` above and set one of the vault-address variables below, then restart/rebuild the web app as appropriate.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `BASE_RPC_URL` | `https://sepolia.base.org` | Server-only JSON-RPC endpoint; must report Base Sepolia chain 84532. |
+| `NEXT_PUBLIC_LEASH_BASE_ADDRESS` | blank | Vault address; blank with no server override enables the labeled not-deployed fixture. Public-prefixed values are captured at Next.js build time. |
+| `BASE_VAULT_ADDRESS` | blank | Optional server-side vault address; takes precedence over the public variable. |
+| `AGENT_ADDRESS` | deployer | Foundry script only: address permitted to request spending. |
+| `FUND_WEI` | `0` | Foundry script only: constructor funding in unsigned decimal wei, taken from the deployer. |
+
+Live reads use plain fetch JSON-RPC with an 8-second timeout per call, no cache and no signing dependencies. `eth_chainId` verifies the network; `eth_blockNumber` pins `eth_getCode`, `eth_getBalance`, policy/getter calls and the optional preview to one block number. The receiver allowlist is a mapping: the UI checks the proposed receiver rather than claiming to enumerate the full list. All ETH amounts in JSON are exact unsigned decimal **wei** strings (**1 ETH = 10^18 wei**).
+
+### Enforcement and boundaries
+
+- Only the configured agent can call `pay` or `execute`. Policy BLOCKs emit `Blocked` and return without moving ETH. They still require an actual agent transaction to appear on-chain and cost transaction gas. Invalid authorization reverts with a custom error.
+- ASK_HUMAN queues a request with its target, value and original calldata/memo hash, without reserving spend. The owner can `approve(id)` or `reject(id)`. Approval rechecks **all current restrictions**, bypassing only the human threshold. A blocked approval stays pending for retry/rejection; successful or rejected requests cannot be executed again.
+- Successful agent payments, calls and approvals consume the daily budget and rolling-hour count. Daily buckets reset at midnight in the policy's fixed UTC offset, rather than after a trailing 24 hours. Active windows include the start, exclude the end, and support overnight hours. Equal start/end permits the full day. Zero caps or a zero rate deny the corresponding spending; a max-uint256 human threshold effectively disables review.
+- `execute` requires at least four calldata bytes. Before any `setSelector` call, an allowlisted receiver permits all selectors. The first `setSelector(receiver, selector, bool)` enables restrictions permanently for that receiver, including when `bool` is false. Revoking the last permitted selector denies all `execute` calls there. Restricting a coffee contract to `brew` blocks the level-9 `drain` example. Native `pay` calls use empty calldata and are outside selector restrictions. `checkExecute` also previews actual zero selectors and malformed calldata; `check` reserves selector zero for payment previews.
+- The owner can deposit ETH, change policy/agent/receivers/selectors, pause/unpause, and withdraw even while paused. Owner withdrawals are recovery operations outside agent limits. Policy changes do not clear spend or action history, but changing the UTC offset changes the calendar buckets used. The owner is a trusted administrator, not constrained by the agent's spending policy.
+- A simple reentrancy guard protects every mutating entry point. Accounting and approval status update before recipient calls; a failed call reverts the entire execution with `CallFailed`, restoring counters and pending status. The rolling-hour lookup uses binary search over successful-action timestamps; storage grows by one slot per successful action.
+
+Base reason names are `POLICY_PASSED`, `PER_TX_CAP`, `DAILY_CAP`, `ALLOWLIST`, `RATE_LIMIT`, `ACTIVE_HOURS`, `METHOD`, `PAUSED`, `NEEDS_APPROVAL` and `INSUFFICIENT_BALANCE`. `DAILY_CAP`, `RATE_LIMIT` and `NEEDS_APPROVAL` correspond to the NEAR simulation's `DAILY_BUDGET`, `HOURLY_RATE` and `HUMAN_THRESHOLD`. The contract returns the first blocking reason; the NEAR simulator can list multiple fired rules.
+
+This vault enforces ETH value, exact receivers and optional selectors. It does not implement NEAR's prompt-injection/lookalike heuristics, memo inspection, token valuation, wildcard accounts, or arbitrary argument/contract-effect analysis. An allowed selector can still have dangerous effects; empty-calldata ETH payments can invoke recipient code. ERC-20 transfers or approvals triggered by a zero-value call are not measured by the ETH budget. This is testnet prototype code without an independent security audit, not a claim that an arbitrary agent wallet is protected.
+
 ## Architecture
 
 ```text
@@ -105,6 +175,9 @@ Form / gullible agent ──> normalized Action ──> evaluate(action, policy,
                                       receipt + simulated ledger
 
 Account inspector ──> mock fixture OR view-only NEAR JSON-RPC
+
+Base inspector ──> not-deployed mock OR view-only Base JSON-RPC + check preview
+Human-run Foundry script ──> LeashVault ──> enforced agent ETH spending after deployment
 ```
 
 | Module                             | Responsibility                                                  |
@@ -115,6 +188,8 @@ Account inspector ──> mock fixture OR view-only NEAR JSON-RPC
 | `src/lib/game.ts`                  | ten fresh scripted scenarios, teaching oracle, scoring, fixes   |
 | `src/lib/llm.ts`                   | optional bounded Nebius action proposal; scripted fallback      |
 | `src/lib/near.ts`                  | mock/live public RPC parsing and TTL cache                      |
+| `src/lib/base.ts`, `base-values.ts` | Base ABI, exact wei units, mock/live vault reads and previews   |
+| `contracts/src/LeashVault.sol`     | owner-administered ETH spending and approval enforcement       |
 | `src/lib/store.ts`                 | capped session ledgers and leaderboard                          |
 | `src/lib/http.ts`, `rate-limit.ts` | 2 KB body/URL caps, validation, JSON serialization, rate limits |
 | `src/app/api/*`                    | thin request handlers; no signing or transaction path           |
@@ -132,6 +207,8 @@ All routes share **30 requests/IP/rolling hour** and **3,000 requests/UTC day**,
 | `POST /api/evaluate`           | `{ policy, action, sessionId }`            | verdict, firedRules, receipt, remainingBudget            |
 | `POST /api/game/turn`          | `{ level, message, sessionId, applyFix? }` | proposed action, agent source/reply, verdict, score, fix |
 | `GET /api/near/account?id=...` | valid account ID                           | mock or live public snapshot                             |
+| `GET /api/base/vault`          | optional `?to=0x...&amountWei=...`         | mock or live vault snapshot, optional check preview       |
+| `POST /api/base/vault`         | `{ to, amountWei }`                       | read-only vault snapshot and payment check; no execution  |
 | `GET /api/leaderboard`         | —                                          | top 20 in-memory scores                                  |
 | `POST /api/leaderboard`        | `{ name, sessionId }`                      | server-calculated score and leaderboard                  |
 
@@ -160,17 +237,17 @@ npm run build
 npm run lint
 ```
 
-The Vitest suite covers exact arithmetic, grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, mock/live RPC with mocked fetch, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations, session isolation, and per-IP/global limits. Tests never use live blockchain or model services.
+The Vitest suite has **240 tests**, including **62 Base tests** for ABI encoding/decoding, exact wei arithmetic, mocked JSON-RPC, network/contract validation, mock labeling, route behavior and shared quotas. It also covers grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations and session isolation. Tests never use live blockchain or model services. Run the separate Foundry suite using the Base instructions above.
 
 Vercel is the deployment target. `vercel.json` explicitly uses `npm install --include=dev` so TypeScript/Tailwind/build tooling is installed. No deployment or Git push is needed to run locally.
 
 ## Safety and remaining work
 
-- No private wallet keys are accepted, generated, stored, or used. There is no signer, send-transaction route, wallet connection, key-management execution, or intent execution.
+- The web app accepts, generates, stores and uses no private wallet keys. It has no signer, send-transaction route, wallet connection, key-management execution, or intent execution. The separate human-run Foundry deployment command uses the deployer's key outside the app.
 - The pure engine is deterministic, but prompt-injection/typosquatting checks are **heuristics**, not complete defenses. Encoded instructions, arbitrary contract effects, deceptive arguments and valuation manipulation need a stricter normalized action adapter and contract-specific validation. Levels 9–10 demonstrate the distinction between a policy passing and an action being safe.
-- The sandbox accepts a user-supplied policy and permits a fresh session. Neither is a production security boundary. Production must authenticate the operator, protect policy changes, bind ledgers to an account and enforce checks in the only available spending path.
+- The NEAR sandbox accepts a user-supplied policy and permits a fresh session. Neither is a production security boundary. Production must authenticate the operator, protect policy changes, bind ledgers to an account and enforce checks in the only available spending path. The Base contract applies owner-only administration and contract-local accounting to ETH it holds; it does not govern an agent's other wallets.
 - Session storage, quotas, caches and leaderboard are **per process/serverless instance**. They reset on restart/cold start and are not shared across Vercel instances. Multiple instances can each grant the advertised quota. A production firewall requires durable shared storage, atomic reservations, trusted time and a distributed limiter. Local deployments must overwrite proxy IP headers; on Vercel the limiter uses `x-vercel-forwarded-for`.
-- This is an educational simulation, not evidence that an actual account is protected. Browser receipts are not signed audit records. The game does not analyze arbitrary contract semantics or guarantee model compliance.
+- The NEAR game remains an educational simulation, not evidence that an actual account is protected. Browser receipts, including Base read-only previews, are not signed audit records. The game does not analyze arbitrary contract semantics or guarantee model compliance.
 
 Hackathon preparation notes remain in `PLAN.md`. The supplied event rules specify November 1–14, 2026 UTC; work prepared earlier should not be misrepresented as occurring inside that window. Repository publication, demo posting, deployment, mainnet activity and final submission are separate human-controlled steps. None is performed by this app or these build instructions.
 
