@@ -95,7 +95,7 @@ References: [NEAR CLI](https://docs.near.org/tools/cli), [NEAR access keys](http
 
 ## Base (Sepolia)
 
-**Contract: `<ADDRESS>`** — placeholder for a future deployment on chain **84532**. Explorer: `https://sepolia.basescan.org/address/<ADDRESS>`. No contract was deployed or funded as part of this change.
+**Contract: `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`** — placeholder for a future deployment on chain **84532**. Explorer: `https://sepolia.basescan.org/address/0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`. No contract was deployed or funded as part of this change.
 
 Choose **Base Sepolia** in the Network selector. NEAR testnet remains the default, and switching back preserves the NEAR lab/game session. The Base screen shows the vault address, owner, agent, policy, ETH balance, today's spend and rolling-hour action count. **Preview a payment on-chain** calls `check(address,uint256,bytes4)` through `eth_call`, with selector zero for a native ETH payment. The resulting receipt does not debit a budget, queue an approval, emit an on-chain event, or send a transaction. A preview describes one block's state; execution may later encounter changed rules/state or a reverting recipient.
 
@@ -138,7 +138,7 @@ The script allowlists these exact addresses, derived from the low 160 bits of `k
 - Coffee: `0x3bd349193d64331371ae5d047e0f91db989e8e35`
 - Weather: `0x6f2e2f1380aa176569b6c84f16d7f2ced5965666`
 
-These are deterministic demo placeholders, not services or accounts with known private keys. Replace the receiver configuration for meaningful use. The default initial funding is zero. After deploying, fill `<ADDRESS>` above and set one of the vault-address variables below, then restart/rebuild the web app as appropriate.
+These are deterministic demo placeholders, not services or accounts with known private keys. Replace the receiver configuration for meaningful use. The default initial funding is zero. After deploying, fill `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f` above and set one of the vault-address variables below, then restart/rebuild the web app as appropriate.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
