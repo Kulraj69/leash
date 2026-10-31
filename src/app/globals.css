@@ -250,12 +250,18 @@ details[open] > summary:after {
   overflow: hidden;
   pointer-events: none;
   z-index: -1;
-  background: radial-gradient(
-    ellipse at 74% 13%,
-    #233559 0%,
-    #121e36 30%,
-    #090f21 75%
-  );
+  background:
+    radial-gradient(
+      ellipse 55% 40% at 84% 9%,
+      #33507f33 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse at 86% 10%,
+      #2a4068 0%,
+      #14234a 34%,
+      #080f24 78%
+    );
 }
 .night-stars {
   position: absolute;
@@ -267,16 +273,67 @@ details[open] > summary:after {
     radial-gradient(circle at 53% 8%, #647d9e 0 1px, transparent 1.5px),
     radial-gradient(circle at 79% 6%, #c6c9bb 0 0.8px, transparent 1.2px),
     radial-gradient(circle at 88% 29%, #b8cbcc 0 1px, transparent 1.6px),
-    radial-gradient(circle at 97% 12%, #667c9a 0 1px, transparent 1.4px);
-  opacity: 0.75;
+    radial-gradient(circle at 97% 12%, #667c9a 0 1px, transparent 1.4px),
+    radial-gradient(circle at 4% 41%, #aebfc6 0 0.7px, transparent 1.1px),
+    radial-gradient(circle at 14% 33%, #d5dcd2 0 0.9px, transparent 1.4px),
+    radial-gradient(circle at 27% 47%, #7e93b4 0 0.7px, transparent 1.1px),
+    radial-gradient(circle at 41% 30%, #c3cbd2 0 1px, transparent 1.5px),
+    radial-gradient(circle at 59% 22%, #8ea3c2 0 0.7px, transparent 1.1px),
+    radial-gradient(circle at 66% 41%, #cdd5cf 0 0.9px, transparent 1.3px),
+    radial-gradient(circle at 84% 44%, #93a8c4 0 0.8px, transparent 1.2px),
+    radial-gradient(circle at 93% 52%, #b9c6cb 0 0.7px, transparent 1.1px),
+    radial-gradient(circle at 47% 55%, #7488ab 0 0.7px, transparent 1.1px),
+    radial-gradient(circle at 22% 58%, #a7b7c6 0 0.8px, transparent 1.2px);
+  opacity: 0.8;
+}
+.night-stars:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 11% 14%, #eef3ea 0 1.1px, transparent 1.7px),
+    radial-gradient(circle at 38% 9%, #e3ead9 0 1px, transparent 1.6px),
+    radial-gradient(circle at 62% 17%, #f0f4ec 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 81% 33%, #dfe8e2 0 1px, transparent 1.6px),
+    radial-gradient(circle at 55% 47%, #e6ede4 0 0.9px, transparent 1.5px);
+  animation: star-twinkle 7s ease-in-out infinite alternate;
+}
+@keyframes star-twinkle {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 0.95;
+  }
 }
 .night-moon {
   position: absolute;
-  right: 8%;
-  top: 115px;
-  width: 58px;
-  height: 58px;
-  filter: drop-shadow(0 0 18px #b4d4ed55);
+  right: 11%;
+  top: 58px;
+  width: 92px;
+  height: 92px;
+  filter: drop-shadow(0 0 42px #cfe2f38c) drop-shadow(0 0 130px #b8d4ee2e);
+}
+.night-haze {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 62% 38% at 82% 44%,
+    #9db8d41c 0%,
+    transparent 68%
+  );
+}
+.night-moon:before {
+  content: "";
+  position: absolute;
+  inset: -130px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    #c8dcf028 0%,
+    #a9c4e014 38%,
+    transparent 68%
+  );
 }
 .night-moon svg {
   width: 100%;
@@ -287,8 +344,8 @@ details[open] > summary:after {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 80vh;
-  opacity: 0.86;
+  height: 82vh;
+  opacity: 0.96;
 }
 .night-ruins {
   position: absolute;
@@ -304,6 +361,16 @@ details[open] > summary:after {
   right: -35px;
   height: 70vh;
 }
+.night-scene:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 55%,
+    #04081ad9 96%
+  );
+}
 .night-scene:after {
   content: "";
   position: absolute;
@@ -312,7 +379,7 @@ details[open] > summary:after {
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.87' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' opacity='.7' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
 }
 .app-shell {
-  max-width: 1192px;
+  max-width: 1046px;
   margin: 0 auto;
   padding: 34px 32px 18px;
 }
@@ -364,14 +431,17 @@ details[open] > summary:after {
 }
 .computer {
   position: relative;
+  margin-top: 30px;
   padding: 0 27px;
   border: 1px solid #e3dbc7;
   border-radius: 13px 13px 20px 20px;
-  background: linear-gradient(120deg, #e6dfce, #c6bda8 70%, #b7ad97);
+  background: linear-gradient(115deg, #ece5d3, #cfc6b0 55%, #b3a892);
   box-shadow:
     inset 2px 3px 1px #f5efdb,
     inset -3px -6px 2px #8f8573,
+    inset 0 1px 0 #d9e4f233,
     0 25px 70px #0008,
+    0 0 110px #1b326066,
     0 1px 0 5px #292d3280;
 }
 .hardware-top {
@@ -2326,6 +2396,10 @@ details[open] > summary:after {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .night-stars:after {
+    animation: none;
+    opacity: 0.55;
+  }
   html {
     scroll-behavior: auto;
   }
@@ -2340,3 +2414,4 @@ details[open] > summary:after {
     transform: none;
   }
 }
+

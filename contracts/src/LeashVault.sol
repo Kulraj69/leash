@@ -311,3 +311,4 @@ contract LeashVault {
         if (!ok) revert CallFailed();
     }
 }
+

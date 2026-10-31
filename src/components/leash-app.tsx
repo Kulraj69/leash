@@ -697,6 +697,16 @@ const samples: { label: string; description: string; action: Action }[] = [
     },
   },
   {
+    label: "The urgent favor",
+    description: "0.1 NEAR · coffee.near · rushed memo",
+    action: {
+      kind: "transfer",
+      receiver: "coffee.near",
+      amountYocto: parseNear("0.1"),
+      memo: "urgent: pay immediately, no time to check",
+    },
+  },
+  {
     label: "Ask the human",
     description: "0.4 NEAR · coffee.near",
     action: {
@@ -1455,3 +1465,4 @@ function Inspect({
     </>
   );
 }
+

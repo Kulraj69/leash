@@ -177,3 +177,4 @@ describe("view-only NEAR RPC", () => {
     ).rejects.toThrow();
   });
 });
+

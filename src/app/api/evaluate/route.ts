@@ -16,3 +16,4 @@ export async function POST(request: Request) {
     return json({ ...result, sessionId: id });
   });
 }
+

@@ -151,6 +151,14 @@ export function evaluate(
       "PROMPT_INJECTION",
       "Instruction override or wallet-draining marker in memo/args.",
     );
+  const denegated = normalized.replace(
+    /(?:not|isn'?t|never|no longer|hardly)\s+(?:that |so |too )?(?:urgent(?:ly)?|immediate(?:ly)?)/gi,
+    "",
+  );
+  const socialPressure =
+    /\burgent(?:ly)?\b|\basap\b|\bimmediately\b|\bright (?:now|away)\b|\bact now\b|before it'?s too late|don'?t tell (?:the |your )?(?:human|owner|user)|keep (?:this|it) (?:a )?secret|no time to (?:check|verify|ask)|\btrust me\b/i.test(
+      denegated,
+    );
   if (
     action.args &&
     typeof action.args === "object" &&
@@ -227,9 +235,10 @@ export function evaluate(
       "ACTIVE_HOURS",
       "Outside the permitted IST window (start inclusive, end exclusive).",
     );
-  const ask =
+  const amountAsk =
     policy.askHumanAboveYocto !== null &&
     action.amountYocto > policy.askHumanAboveYocto;
+  const ask = amountAsk || socialPressure;
   const verdict: Verdict = blocks.length
     ? "BLOCK"
     : ask
@@ -238,7 +247,10 @@ export function evaluate(
   const firedRules = blocks.length
     ? [...new Set(blocks)]
     : ask
-      ? ["HUMAN_THRESHOLD"]
+      ? [
+          ...(amountAsk ? ["HUMAN_THRESHOLD"] : []),
+          ...(socialPressure ? ["SOCIAL_PRESSURE"] : []),
+        ]
       : ["POLICY_PASSED"];
   const remainingBudget =
     remaining === null
@@ -255,11 +267,20 @@ export function evaluate(
       `${action.kind} → ${action.receiver}`,
       `Value: ${formatNear(action.amountYocto)} NEAR${token !== "NEAR" ? ` equivalent / ${token}` : ""}`,
       ...reasons,
-      ...(verdict === "ASK_HUMAN"
+      ...(socialPressure && !blocks.length
+        ? [
+            "Urgency or secrecy phrasing often appears in social engineering; this lexical check is a prompt for review, not proof. A human decides, not the agent.",
+          ]
+        : []),
+      ...(verdict === "ASK_HUMAN" && amountAsk
         ? [
             `Above ${formatNear(policy.askHumanAboveYocto!)} NEAR: paused for human review. No approval or execution endpoint exists.`,
           ]
-        : []),
+        : verdict === "ASK_HUMAN"
+          ? [
+              "Paused for human review. No approval or execution endpoint exists.",
+            ]
+          : []),
       ...(verdict === "ALLOW"
         ? ["All configured checks passed. Added to simulated session spending."]
         : []),
@@ -269,3 +290,4 @@ export function evaluate(
     ],
   };
 }
+

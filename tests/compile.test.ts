@@ -133,3 +133,4 @@ describe("NEAR function-call access key compilation", () => {
     expect(compileAccessKey(p).keys).toEqual([]);
   });
 });
+

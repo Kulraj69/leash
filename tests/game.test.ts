@@ -136,3 +136,4 @@ describe("session store and leaderboard", () => {
     expect(s.leaderboard()[0].score.blocked).toBe(1);
   });
 });
+

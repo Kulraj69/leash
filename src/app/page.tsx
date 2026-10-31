@@ -9,3 +9,4 @@ export default function Page() {
 }
 // Resolve mode badges at request time, not at build time.
 export const dynamic = "force-dynamic";
+

@@ -7,3 +7,4 @@ export async function POST(request: Request) {
     return json({ ...compiled, accessKey: compileAccessKey(compiled.policy) });
   });
 }
+

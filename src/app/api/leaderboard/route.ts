@@ -18,3 +18,4 @@ export async function POST(request: Request) {
     return json({ entry, entries: store.leaderboard() });
   });
 }
+

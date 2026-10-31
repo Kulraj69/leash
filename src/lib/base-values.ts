@@ -71,3 +71,4 @@ export function formatEth(value: bigint): string {
     .replace(/0+$/, "");
   return `${sign}${amount / WEI_PER_ETH}${fraction ? `.${fraction}` : ""}`;
 }
+

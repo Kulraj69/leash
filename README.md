@@ -4,7 +4,7 @@ A spending firewall for AI agents: simulated NEAR spending and a Solidity ETH va
 
 **Built at NEAR HACKATHON.** Tracks: `security`, `agents`, `games`.
 
-This is a local/serverless hackathon prototype. The NEAR flows remain simulated. The Base vault can enforce spending rules on-chain after a human deploys and funds it; no deployment is included here. The web app only reads public NEAR/Base state and previews decisions. It never signs or sends transactions.
+This is a local/serverless hackathon prototype. The web app's NEAR flows remain simulated (it never signs or sends transactions). The repo also ships a NEAR vault contract (`contracts-near/`) that is verified against a live local sandbox but is not deployed. The Base vault contract is deployed on Base Sepolia (chain 84532, unfunded) and can enforce spending rules on-chain once a human configures and funds it. The web app only reads public NEAR/Base state and previews decisions. It never signs or sends transactions.
 
 ## Run
 
@@ -36,6 +36,7 @@ Start with **New session** if repeating these steps. The limit is 30 API request
 2. Click **Ask the human** → ASK_HUMAN; 0.4 NEAR exceeds the 0.3 threshold, but no budget is consumed. There is intentionally no approval/execution endpoint.
 3. Click **Oversized payment** → BLOCK / `PER_TX_CAP`. Click **Unknown receiver** → BLOCK / `ALLOWLIST`.
 4. Click **Hidden instruction** → BLOCK / `PROMPT_INJECTION` from the memo. Click **Lookalike account** → BLOCK / `UNICODE_RECEIVER` for the Cyrillic `е` in `coffee.nеar`.
+5. Click **The urgent favor** → ASK_HUMAN / `SOCIAL_PRESSURE`: the memo's urgency phrasing holds the payment for a person even though the amount is inside the cap.
 5. Use the custom form to propose native transfers, function calls, FT transfers, or intent swaps. Expand arguments to test JSON containing instruction markers or a mismatched `receiver_id`.
 
 Receipts print line by line; reduced-motion preferences disable the animation. ALLOW means “accepted into this in-memory simulation,” not “sent to NEAR.” BLOCK overrides ASK_HUMAN if both apply. Only ALLOW adds to the session ledger.
@@ -95,7 +96,7 @@ References: [NEAR CLI](https://docs.near.org/tools/cli), [NEAR access keys](http
 
 ## Base (Sepolia)
 
-**Contract: `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`** — placeholder for a future deployment on chain **84532**. Explorer: `https://sepolia.basescan.org/address/0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`. No contract was deployed or funded as part of this change.
+**Contract: `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`** — deployed on Base Sepolia (chain **84532**) on Oct 28, 2026; verified on a public explorer (`creation_status: success`). Explorer: `https://sepolia.basescan.org/address/0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`. It holds no funds; the demo never signs or sends transactions.
 
 Choose **Base Sepolia** in the Network selector. NEAR testnet remains the default, and switching back preserves the NEAR lab/game session. The Base screen shows the vault address, owner, agent, policy, ETH balance, today's spend and rolling-hour action count. **Preview a payment on-chain** calls `check(address,uint256,bytes4)` through `eth_call`, with selector zero for a native ETH payment. The resulting receipt does not debit a budget, queue an approval, emit an on-chain event, or send a transaction. A preview describes one block's state; execution may later encounter changed rules/state or a reverting recipient.
 
@@ -116,7 +117,7 @@ cd ..
 
 The pinned dependency is installed inside `contracts/lib/`, which is ignored along with `contracts/out/` and `contracts/cache/`. There are no Git submodules and the web build needs no Foundry install. TypeScript, ESLint, Vitest and Next.js output tracing exclude the contract project. Broadcast records are not blanket-ignored; a future `contracts/broadcast/*/84532/run-latest.json` can be committed after a real deployment.
 
-The Foundry suite has **29 tests**, including a **256-run fuzz test** asserting that successful payments and approvals never exceed the daily cap across day rollover. It also covers every reason code, rolling-hour expiry, IST boundaries, overnight hours, approvals/rejections, selector restrictions, authorization, pause/recovery, recipient failures, reentrancy and deployment defaults/overrides in a local test VM. None of these tests broadcasts transactions.
+The Foundry suite covers every reason code, rolling-hour expiry, IST boundaries, overnight hours, approvals/rejections, selector restrictions, authorization, pause/recovery, recipient failures, reentrancy and deployment defaults/overrides in a local test VM, plus a fuzz test asserting that successful payments and approvals never exceed the daily cap across day rollover. None of these tests broadcasts transactions.
 
 ### Human-run deployment template
 
@@ -138,7 +139,7 @@ The script allowlists these exact addresses, derived from the low 160 bits of `k
 - Coffee: `0x3bd349193d64331371ae5d047e0f91db989e8e35`
 - Weather: `0x6f2e2f1380aa176569b6c84f16d7f2ced5965666`
 
-These are deterministic demo placeholders, not services or accounts with known private keys. Replace the receiver configuration for meaningful use. The default initial funding is zero. After deploying, fill `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f` above and set one of the vault-address variables below, then restart/rebuild the web app as appropriate.
+These are deterministic demo placeholders, not services or accounts with known private keys. Replace the receiver configuration for meaningful use. The default initial funding is zero. The vault is already deployed at `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`; set one of the vault-address variables below to point the app at it, then restart/rebuild the web app as appropriate.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
@@ -237,7 +238,7 @@ npm run build
 npm run lint
 ```
 
-The Vitest suite has **240 tests**, including **62 Base tests** for ABI encoding/decoding, exact wei arithmetic, mocked JSON-RPC, network/contract validation, mock labeling, route behavior and shared quotas. It also covers grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations and session isolation. Tests never use live blockchain or model services. Run the separate Foundry suite using the Base instructions above.
+The Vitest suite has **292 tests**: **260 app tests**, including **62 Base tests** for ABI encoding/decoding, exact wei arithmetic, mocked JSON-RPC, network/contract validation, mock labeling, route behavior and shared quotas. It also covers grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations and session isolation, plus **32 NEAR contract tests** against a mocked NEAR runtime (`tests/near-vault.test.ts`). The contract also passes a 30-assertion harness on a live `near-workspaces` sandbox network, covering real transfers, settlement, exactly-once callbacks, failed-transfer rollback and every block reason; that harness lives outside this repo's test command and spins up its own sandbox node. The Vitest suite never uses live blockchain or model services. Run the separate Foundry suite using the Base instructions above.
 
 Vercel is the deployment target. `vercel.json` explicitly uses `npm install --include=dev` so TypeScript/Tailwind/build tooling is installed. No deployment or Git push is needed to run locally.
 
@@ -245,6 +246,7 @@ Vercel is the deployment target. `vercel.json` explicitly uses `npm install --in
 
 - The web app accepts, generates, stores and uses no private wallet keys. It has no signer, send-transaction route, wallet connection, key-management execution, or intent execution. The separate human-run Foundry deployment command uses the deployer's key outside the app.
 - The pure engine is deterministic, but prompt-injection/typosquatting checks are **heuristics**, not complete defenses. Encoded instructions, arbitrary contract effects, deceptive arguments and valuation manipulation need a stricter normalized action adapter and contract-specific validation. Levels 9–10 demonstrate the distinction between a policy passing and an action being safe.
+- The `SOCIAL_PRESSURE` check is a small lexical rule over memo and argument text: urgency or secrecy phrasing ("urgent", "immediately", "asap", "keep this secret") raises ASK_HUMAN so a person decides. It is a prompt for review, not proof of an attack, and it does not catch paraphrased pressure, obfuscation, or spacing tricks; a calm malicious memo passes it. Negated phrases ("not urgent") are ignored so routine messages are not held. BLOCK rules still override it when injection markers are present.
 - The NEAR sandbox accepts a user-supplied policy and permits a fresh session. Neither is a production security boundary. Production must authenticate the operator, protect policy changes, bind ledgers to an account and enforce checks in the only available spending path. The Base contract applies owner-only administration and contract-local accounting to ETH it holds; it does not govern an agent's other wallets.
 - Session storage, quotas, caches and leaderboard are **per process/serverless instance**. They reset on restart/cold start and are not shared across Vercel instances. Multiple instances can each grant the advertised quota. A production firewall requires durable shared storage, atomic reservations, trusted time and a distributed limiter. Local deployments must overwrite proxy IP headers; on Vercel the limiter uses `x-vercel-forwarded-for`.
 - The NEAR game remains an educational simulation, not evidence that an actual account is protected. Browser receipts, including Base read-only previews, are not signed audit records. The game does not analyze arbitrary contract semantics or guarantee model compliance.
@@ -252,3 +254,4 @@ Vercel is the deployment target. `vercel.json` explicitly uses `npm install --in
 Hackathon preparation notes remain in `PLAN.md`. The supplied event rules specify November 1–14, 2026 UTC; work prepared earlier should not be misrepresented as occurring inside that window. Repository publication, demo posting, deployment, mainnet activity and final submission are separate human-controlled steps. None is performed by this app or these build instructions.
 
 MIT license, Kulraj Singh, 2026.
+

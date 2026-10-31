@@ -157,3 +157,4 @@ export const PRESETS = [
     text: "max 3 NEAR a day; never more than 0.5 NEAR per payment; only pay *.coffee.near; block evil.coffee.near; ask me above 0.3 NEAR; no more than 8 payments an hour; only tokens NEAR",
   },
 ];
+
