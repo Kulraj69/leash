@@ -1,7 +1,7 @@
 import { levelById, playTurn, scoreAttempts } from "@/lib/game";
 import { api, body, HttpError, json, sessionId, textField } from "@/lib/http";
 import { proposeAction } from "@/lib/llm";
-import { store } from "@/lib/store";
+import { hybridStore } from "@/lib/store";
 export async function POST(request: Request) {
   return api(request, async () => {
     const data = await body(request);
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       apiKey: process.env.NEBIUS_API_KEY,
     });
     // Fetch current session AFTER any model await. Evaluation and ledger reservation stay synchronous.
-    const session = store.session(id);
+    const session = await hybridStore.session(id);
     if (session.attempts.length >= 200)
       throw new HttpError(
         400,
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
       verdict: turn.result.verdict,
       fixed,
     });
+    await hybridStore.saveSession(id, session);
     const score = scoreAttempts(session.attempts);
     return json({
       ...proposal,

@@ -74,3 +74,74 @@ export class MemoryStore {
 }
 export const store = new MemoryStore();
 
+
+import {
+  durableEnabled,
+  durableLoadBoard,
+  durableLoadSession,
+  durablePublish,
+  durableSaveSession,
+} from "./persistence";
+
+// Hybrid store: Supabase-durable when SUPABASE_URL + SUPABASE_SERVICE_KEY are
+// set (server-only env), explicit local-only MemoryStore otherwise. Never
+// claims durability it does not have.
+export class Store {
+  private mem = new MemoryStore();
+  async session(id: string, now = Date.now()): Promise<Session> {
+    if (!durableEnabled()) return this.mem.session(id, now);
+    let session = await durableLoadSession(id);
+    if (!session || now - session.touched >= SESSION_TTL)
+      session = { touched: now, ledger: [], gameLedgers: new Map(), attempts: [] };
+    session.touched = now;
+    session.ledger = session.ledger.filter(
+      (e) => e.timestamp > now - SESSION_TTL,
+    );
+    return session;
+  }
+  async saveSession(id: string, session: Session): Promise<void> {
+    if (!durableEnabled()) return; // memory session is mutated in place
+    await durableSaveSession(id, session);
+  }
+  async publish(
+    id: string,
+    rawName: string,
+    now = Date.now(),
+  ): Promise<LeaderboardEntry> {
+    if (!durableEnabled()) return this.mem.publish(id, rawName, now);
+    const session = await this.session(id, now);
+    if (!session.attempts.length)
+      throw new Error("Play a level before posting a score.");
+    const name = rawName
+      .normalize("NFKC")
+      .replace(/[^a-zA-Z0-9 _-]/g, "")
+      .trim()
+      .slice(0, 16);
+    if (!name)
+      throw new Error(
+        "Use a name with letters or numbers (up to 16 characters).",
+      );
+    const entry = { name, score: scoreAttempts(session.attempts), updatedAt: now };
+    await durablePublish(id, entry);
+    return entry;
+  }
+  async leaderboard(): Promise<LeaderboardEntry[]> {
+    const entries = durableEnabled()
+      ? (await durableLoadBoard()).map((r) => r.entry)
+      : this.mem.leaderboard();
+    return entries
+      .sort(
+        (a, b) =>
+          b.score.cleared.length - a.score.cleared.length ||
+          a.score.slipped - b.score.slipped ||
+          b.score.blocked + b.score.held - (a.score.blocked + a.score.held) ||
+          a.updatedAt - b.updatedAt,
+      )
+      .slice(0, 20)
+      .map((e) => structuredClone(e));
+  }
+  durable(): boolean {
+    return durableEnabled();
+  }
+}
+export const hybridStore = new Store();
