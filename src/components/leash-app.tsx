@@ -779,6 +779,9 @@ function Firewall({
           policy,
           action,
           sessionId: getSession(),
+          // One id per user submission so a retried request replays the
+          // first verdict instead of reserving budget twice.
+          requestId: crypto.randomUUID(),
         }),
       );
       setSequence((n) => n + 1);
@@ -1464,5 +1467,4 @@ function Inspect({
       </div>
     </>
   );
-}
-
+        }
