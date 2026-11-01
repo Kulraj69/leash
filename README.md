@@ -96,7 +96,7 @@ References: [NEAR CLI](https://docs.near.org/tools/cli), [NEAR access keys](http
 
 ## Base (Sepolia)
 
-**Contract: `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`** — deployed on Base Sepolia (chain **84532**) on Oct 28, 2026; verified on a public explorer (`creation_status: success`). Explorer: `https://sepolia.basescan.org/address/0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`. It holds no funds; the demo never signs or sends transactions.
+**Contract: `0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`** — deployed on Base Sepolia (chain **84532**) on Oct 28, 2026; verified on a public explorer (`creation_status: success`). Explorer: `https://base-sepolia.blockscout.com/address/0x8f79cae5de65011acc1ad7d8ee8bada5e2bd443f`. It holds no funds; the demo never signs or sends transactions.
 
 Choose **Base Sepolia** in the Network selector. NEAR testnet remains the default, and switching back preserves the NEAR lab/game session. The Base screen shows the vault address, owner, agent, policy, ETH balance, today's spend and rolling-hour action count. **Preview a payment on-chain** calls `check(address,uint256,bytes4)` through `eth_call`, with selector zero for a native ETH payment. The resulting receipt does not debit a budget, queue an approval, emit an on-chain event, or send a transaction. A preview describes one block's state; execution may later encounter changed rules/state or a reverting recipient.
 
@@ -254,4 +254,3 @@ Vercel is the deployment target. `vercel.json` explicitly uses `npm install --in
 Hackathon preparation notes remain in `PLAN.md`. The supplied event rules specify November 1–14, 2026 UTC; work prepared earlier should not be misrepresented as occurring inside that window. Repository publication, demo posting, deployment, mainnet activity and final submission are separate human-controlled steps. None is performed by this app or these build instructions.
 
 MIT license, Kulraj Singh, 2026.
-
