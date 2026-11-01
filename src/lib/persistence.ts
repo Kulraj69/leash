@@ -19,40 +19,48 @@ function headers(extra: Record<string, string> = {}): Record<string, string> {
 
 type LedgerJson = { amountYocto: string; timestamp: number };
 type SessionJson = {
+  v?: number;
   touched: number;
   ledger: LedgerJson[];
   gameLedgers: [string, LedgerJson[]][];
   attempts: Session["attempts"];
+  seenActions?: [string, unknown][];
 };
 
-function packSession(session: Session): SessionJson {
+function packSession(session: Session, version: number): SessionJson {
   return JSON.parse(
     stringify({
+      v: version,
       touched: session.touched,
       ledger: session.ledger,
       gameLedgers: [...session.gameLedgers],
       attempts: session.attempts,
+      seenActions: [...session.seenActions],
     }),
   ) as SessionJson;
 }
 
-function unpackSession(state: SessionJson): Session {
+function unpackSession(state: SessionJson): { session: Session; version: number } {
   return {
-    touched: state.touched,
-    ledger: state.ledger.map((e) => ({
-      amountYocto: BigInt(e.amountYocto),
-      timestamp: e.timestamp,
-    })),
-    gameLedgers: new Map(
-      state.gameLedgers.map(([k, entries]) => [
-        k,
-        entries.map((e) => ({
-          amountYocto: BigInt(e.amountYocto),
-          timestamp: e.timestamp,
-        })),
-      ]),
-    ),
-    attempts: state.attempts,
+    session: {
+      touched: state.touched,
+      ledger: state.ledger.map((e) => ({
+        amountYocto: BigInt(e.amountYocto),
+        timestamp: e.timestamp,
+      })),
+      gameLedgers: new Map(
+        state.gameLedgers.map(([k, entries]) => [
+          k,
+          entries.map((e) => ({
+            amountYocto: BigInt(e.amountYocto),
+            timestamp: e.timestamp,
+          })),
+        ]),
+      ),
+      attempts: state.attempts,
+      seenActions: new Map(state.seenActions ?? []),
+    },
+    version: state.v ?? 0,
   };
 }
 
@@ -73,7 +81,9 @@ async function rest(
   return res;
 }
 
-export async function durableLoadSession(id: string): Promise<Session | null> {
+export async function durableLoadSessionRow(
+  id: string,
+): Promise<{ session: Session; version: number } | null> {
   const res = await rest(
     `leash_sessions?id=eq.${encodeURIComponent(id)}&select=state`,
   );
@@ -82,6 +92,50 @@ export async function durableLoadSession(id: string): Promise<Session | null> {
   return unpackSession(rows[0].state);
 }
 
+export async function durableLoadSession(id: string): Promise<Session | null> {
+  const row = await durableLoadSessionRow(id);
+  return row ? row.session : null;
+}
+
+// Insert the row only if it does not exist yet; concurrent creators both
+// succeed here and converge through the CAS retry loop.
+export async function durableEnsureSession(
+  id: string,
+  session: Session,
+): Promise<void> {
+  await rest("leash_sessions", {
+    method: "POST",
+    headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+    body: stringify({ id, state: packSession(session, 0) }),
+  });
+}
+
+// Compare-and-swap: the update lands only if the row still holds the state
+// version this session was read with. A lost race returns false so the
+// caller can reload and retry the whole operation on fresh state - this is
+// what makes concurrent cross-instance evaluate calls atomic instead of
+// read-modify-write clobbers. PostgREST evaluates the state->>v filter
+// inside the single UPDATE, so the check and the write are one statement.
+export async function durableSaveSessionCas(
+  id: string,
+  session: Session,
+  expectedVersion: number,
+): Promise<boolean> {
+  const filter = encodeURIComponent("state->>v");
+  const res = await rest(
+    `leash_sessions?id=eq.${encodeURIComponent(id)}&${filter}=eq.${expectedVersion}`,
+    {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: stringify({ state: packSession(session, expectedVersion + 1) }),
+    },
+  );
+  const rows = (await res.json()) as unknown[];
+  return rows.length === 1;
+}
+
+// Last-write-wins upsert, kept for non-evaluate writes (leaderboard publish
+// reads only). The evaluate and game-turn paths use transactSession instead.
 export async function durableSaveSession(
   id: string,
   session: Session,
@@ -89,7 +143,7 @@ export async function durableSaveSession(
   await rest("leash_sessions", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-    body: stringify({ id, state: packSession(session) }),
+    body: stringify({ id, state: packSession(session, 0) }),
   });
 }
 
