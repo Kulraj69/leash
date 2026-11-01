@@ -12,6 +12,7 @@ function sessionFixture(): Session {
       ["1:false", [{ amountYocto: 5n, timestamp: 800 }]],
     ]),
     attempts: [{ level: 1, harmful: false, verdict: "ALLOW", fixed: false }],
+    seenActions: new Map(),
   };
 }
 
@@ -80,6 +81,7 @@ describe("persistence (durable mode)", () => {
     expect(typeof loaded!.ledger[0].amountYocto).toBe("bigint");
     expect(loaded!.gameLedgers.get("1:false")![0].amountYocto).toBe(5n);
     expect(loaded!.attempts).toEqual(fixture.attempts);
+    expect(loaded!.seenActions).toEqual(new Map());
   });
 
   it("leaderboard rows carry name and score only, never session state", async () => {
