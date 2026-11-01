@@ -5,6 +5,8 @@ export type Session = {
   ledger: LedgerEntry[];
   gameLedgers: Map<string, LedgerEntry[]>;
   attempts: GameAttempt[];
+  // Idempotency: requestId -> JSON-safe Evaluation already returned for it.
+  seenActions: Map<string, unknown>;
 };
 export type LeaderboardEntry = {
   name: string;
@@ -27,6 +29,7 @@ export class MemoryStore {
         ledger: [],
         gameLedgers: new Map(),
         attempts: [],
+        seenActions: new Map(),
       };
       this.sessions.set(id, session);
     }
@@ -77,11 +80,22 @@ export const store = new MemoryStore();
 
 import {
   durableEnabled,
+  durableEnsureSession,
   durableLoadBoard,
-  durableLoadSession,
+  durableLoadSessionRow,
   durablePublish,
-  durableSaveSession,
+  durableSaveSessionCas,
 } from "./persistence";
+
+function freshSession(now: number): Session {
+  return {
+    touched: now,
+    ledger: [],
+    gameLedgers: new Map(),
+    attempts: [],
+    seenActions: new Map(),
+  };
+}
 
 // Hybrid store: Supabase-durable when SUPABASE_URL + SUPABASE_SERVICE_KEY are
 // set (server-only env), explicit local-only MemoryStore otherwise. Never
@@ -90,18 +104,45 @@ export class Store {
   private mem = new MemoryStore();
   async session(id: string, now = Date.now()): Promise<Session> {
     if (!durableEnabled()) return this.mem.session(id, now);
-    let session = await durableLoadSession(id);
+    const row = await durableLoadSessionRow(id);
+    let session = row ? row.session : null;
     if (!session || now - session.touched >= SESSION_TTL)
-      session = { touched: now, ledger: [], gameLedgers: new Map(), attempts: [] };
+      session = freshSession(now);
     session.touched = now;
     session.ledger = session.ledger.filter(
       (e) => e.timestamp > now - SESSION_TTL,
     );
     return session;
   }
-  async saveSession(id: string, session: Session): Promise<void> {
-    if (!durableEnabled()) return; // memory session is mutated in place
-    await durableSaveSession(id, session);
+  // Atomic read-modify-write for session mutation. fn must be synchronous
+  // and free of side effects outside the session: in durable mode it may
+  // run more than once, each time on freshly loaded state, until the
+  // compare-and-swap write wins. Concurrent instances serialize through the
+  // state version, so two simultaneous calls cannot clobber each other's
+  // ledger or idempotency records.
+  async transactSession<T>(
+    id: string,
+    now: number,
+    fn: (session: Session) => T,
+  ): Promise<T> {
+    if (!durableEnabled()) return fn(this.mem.session(id, now));
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const row = await durableLoadSessionRow(id);
+      if (!row) {
+        await durableEnsureSession(id, freshSession(now));
+        continue;
+      }
+      let { session } = row;
+      const { version } = row;
+      if (now - session.touched >= SESSION_TTL) session = freshSession(now);
+      session.touched = now;
+      session.ledger = session.ledger.filter(
+        (e) => e.timestamp > now - SESSION_TTL,
+      );
+      const out = fn(session);
+      if (await durableSaveSessionCas(id, session, version)) return out;
+    }
+    throw new Error("This session is busy; retry the request.");
   }
   async publish(
     id: string,
