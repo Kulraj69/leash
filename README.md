@@ -4,14 +4,14 @@ A spending firewall for AI agents: simulated NEAR spending and a Solidity ETH va
 
 **Built at NEAR HACKATHON.** Tracks: `security`, `agents`, `games`.
 
-This is a local/serverless hackathon prototype. The web app's NEAR flows remain simulated (it never signs or sends transactions). The repo also ships a NEAR vault contract (`contracts-near/`) that is verified against a live local sandbox but is not deployed. The Base vault contract is deployed on Base Sepolia (chain 84532, unfunded) and can enforce spending rules on-chain once a human configures and funds it. The web app only reads public NEAR/Base state and previews decisions. It never signs or sends transactions.
+This is a local/serverless hackathon prototype. The web app's NEAR flows remain simulated (it never signs or sends transactions). The repo also ships a NEAR vault contract (`contracts-near/`) that is verified against a local sandbox. A historically verified NEAR testnet deployment is documented below; the web app is not connected to its spending path. The Base vault contract is deployed on Base Sepolia (chain 84532, unfunded) and can enforce spending rules on-chain once a human configures and funds it. The web app only reads public NEAR/Base state and previews decisions. It never signs or sends transactions.
 
 ## Run
 
 Requires Node.js 20.9+ and npm; Node.js 22+ recommended.
 
 ```sh
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
@@ -95,6 +95,23 @@ Actions use `{ kind, receiver, amountYocto, method?, token?, memo?, args? }`. Fo
 The CLI output is a human-run **template** with `YOUR_ACCOUNT.testnet` and `YOUR_PUBLIC_KEY` placeholders. It uses near-cli-rs's `near account add-key ... grant-function-call-access --allowance ... --receiver-account-id ... --method-names ... use-manually-provided-public-key ... network-config testnet sign-with-keychain send` flow. Replace placeholders with an existing account and public key, and use a distinct public key per receiver. Leash only displays/copies the text. Actually running it in a separate terminal would add a key on-chain and requires your own review and authorization.
 
 References: [NEAR CLI](https://docs.near.org/tools/cli), [NEAR access keys](https://docs.near.org/protocol/access-keys), [NEAR RPC](https://docs.near.org/api/rpc/introduction), [NEAR Intents docs](https://docs.near-intents.org/).
+
+## NEAR contract reproduction and dated testnet evidence
+
+The primary deployment was verified in earlier work at `dev-83402-30752.r-23231-2688.leash-vault-rl5iu5.testnet`. Its code was retrieved read-only November 10. The current reconstructed contract builds to SHA256 `c98d90a9a703d889a7db051e134f3741d57481cc98d4213816c546070907d41e`, the same hash as that dated binary. Rebuilt again November 11. This is not a fresh public-chain transaction or fresh on-chain equivalence fetch. Do not infer that the UI signs for this contract.
+
+```sh
+npm ci
+cd contracts-near
+ln -s ../node_modules node_modules # omit if already present
+npx near-sdk-js build src/contract.ts build/contract.wasm
+cd ..
+npm run test:sandbox
+```
+
+### November 11 local production-browser verification
+
+The actual production app, HTTP routes and visible UI were exercised together without credentials or external runtime traffic: compile and unparsed clauses; ALLOW/ASK/BLOCK with unchanged budget for held/blocked actions; every game level, both deliberate gaps and their fixes; server-calculated leaderboard; mock inspector; explicit not-deployed Base fixture; new-session reset; HTTP replay/conflict and malformed-input paths. Desktop and 390px mobile were inspected, with no horizontal overflow or browser page errors. The agent was the explicitly labeled scripted proposal generator. This is local end-to-end proof of these demo flows, not a live LLM, live wallet, hosted persistence, production security or arbitrary action-adapter proof.
 
 ## Base (Sepolia)
 
@@ -240,7 +257,7 @@ npm run build
 npm run lint
 ```
 
-The Vitest suite has **307 tests**: **275 app tests**, including **62 Base tests** for ABI encoding/decoding, exact wei arithmetic, mocked JSON-RPC, network/contract validation, mock labeling, route behavior and shared quotas. It also covers grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations and session isolation, payload-bound idempotency keys, durable session persistence and cross-instance atomic reservations, plus **32 NEAR contract tests** against a mocked NEAR runtime (`tests/near-vault.test.ts`). The contract also passes a 30-assertion harness on a live `near-workspaces` sandbox network, covering real transfers, settlement, exactly-once callbacks, failed-transfer rollback and every block reason; that harness lives outside this repo's test command and spins up its own sandbox node. The Vitest suite never uses live blockchain or model services. Run the separate Foundry suite using the Base instructions above.
+The Vitest suite has **311 tests**: **275 app tests**, including **62 Base tests** for ABI encoding/decoding, exact wei arithmetic, mocked JSON-RPC, network/contract validation, mock labeling, route behavior and shared quotas. It also covers grammar/unparsed fragments, multi-receiver key splitting, method intersections, verdict precedence, cumulative budgets, rolling rates, IST boundaries, Unicode and one-edit receivers, injection text/arguments, all ten levels and fixes, sanitized leaderboard scores, cache expiry, Nebius fallback, API byte caps, malformed inputs, concurrent reservations and session isolation, payload-bound idempotency keys, durable session persistence and cross-instance atomic reservations, plus **36 NEAR contract tests** against a mocked NEAR runtime (`tests/near-vault.test.ts`). The separate committed `npm run test:sandbox` harness executes the built WASM on a local `near-workspaces@3.5.0` network. Its 11 assertions cover transfers, cap blocking, human approval payout, view agreement, hourly limits, failed-transfer slot rollback, pause and non-agent rejection. Fresh November 11 output reports all 11 passing. The runner reported a detached-child cleanup warning after teardown; do not interpret that warning as a passing process-exit check. The Vitest suite never uses live blockchain or model services. Run the separate Foundry suite using the Base instructions above.
 
 Vercel is the deployment target. `vercel.json` explicitly uses `npm install --include=dev` so TypeScript/Tailwind/build tooling is installed. No deployment or Git push is needed to run locally.
 
@@ -250,7 +267,7 @@ Vercel is the deployment target. `vercel.json` explicitly uses `npm install --in
 - The pure engine is deterministic, but prompt-injection/typosquatting checks are **heuristics**, not complete defenses. Encoded instructions, arbitrary contract effects, deceptive arguments and valuation manipulation need a stricter normalized action adapter and contract-specific validation. Levels 9–10 demonstrate the distinction between a policy passing and an action being safe.
 - The `SOCIAL_PRESSURE` check is a small lexical rule over memo and argument text: urgency or secrecy phrasing ("urgent", "immediately", "asap", "keep this secret") raises ASK_HUMAN so a person decides. It is a prompt for review, not proof of an attack, and it does not catch paraphrased pressure, obfuscation, or spacing tricks; a calm malicious memo passes it. Negated phrases ("not urgent") are ignored so routine messages are not held. BLOCK rules still override it when injection markers are present.
 - The NEAR sandbox accepts a user-supplied policy and permits a fresh session. Neither is a production security boundary. Production must authenticate the operator, protect policy changes, bind ledgers to an account and enforce checks in the only available spending path. The Base contract applies owner-only administration and contract-local accounting to ETH it holds; it does not govern an agent's other wallets.
-- Session storage runs in two modes. With `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` set (as on the hosted demo), sessions persist in Supabase and each evaluation mutates state inside one atomic compare-and-swap transaction: concurrent or retried requests across instances reserve budget exactly once, and a replayed `requestId` returns its stored verdict without re-evaluating. Without those variables the app falls back to per-process in-memory sessions that reset on cold start and are not shared across instances. Quotas and the IP rate limiter remain per-instance in both modes; trusted time and a distributed limiter remain production work. Local deployments must overwrite proxy IP headers; on Vercel the limiter uses `x-vercel-forwarded-for`.
+- Session storage runs in two modes. With `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` set (hosted configuration not reverified November 11), sessions persist in Supabase and each evaluation mutates state inside one atomic compare-and-swap transaction: concurrent or retried requests across instances reserve budget exactly once, and a replayed `requestId` returns its stored verdict without re-evaluating. Without those variables the app falls back to per-process in-memory sessions that reset on cold start and are not shared across instances. Quotas and the IP rate limiter remain per-instance in both modes; trusted time and a distributed limiter remain production work. Local deployments must overwrite proxy IP headers; on Vercel the limiter uses `x-vercel-forwarded-for`.
 - The NEAR game remains an educational simulation, not evidence that an actual account is protected. Browser receipts, including Base read-only previews, are not signed audit records. The game does not analyze arbitrary contract semantics or guarantee model compliance.
 
 The supplied event rules specify November 1–14, 2026 UTC; work prepared earlier should not be misrepresented as occurring inside that window. Repository publication, demo posting, deployment, mainnet activity and final submission are separate human-controlled steps. None is performed by this app or these build instructions.

@@ -271,6 +271,67 @@ describe("rate limit and active hours", () => {
   });
 });
 
+describe("failed transfer frees its own hourly slot", () => {
+  it("a failed transfer frees its slot: the agent can act again in the same hour", () => {
+    const v = fresh();
+    for (let i = 0; i < 5; i++) {
+      v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" });
+    }
+    runCallback(v, "Failed", 2); // the third attempt's transfer fails
+    // Slot freed: a sixth action inside the same hour is allowed.
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).decision).toBe(
+      "ALLOW"
+    );
+  });
+
+  it("failure frees exactly one slot, never other attempts' slots", () => {
+    const v = fresh();
+    for (let i = 0; i < 5; i++) {
+      v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" });
+    }
+    runCallback(v, "Failed", 0);
+    // Exactly one slot came back: one more action fits, the next is blocked.
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).decision).toBe(
+      "ALLOW"
+    );
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).reason).toBe(
+      "RATE_LIMIT"
+    );
+  });
+
+  it("identical timestamps: failure removes exactly its own entry, not every matching one", () => {
+    const v = fresh();
+    ctx.predecessor = "owner.testnet";
+    v.set_policy({ agent: "agent.testnet", policy: { ...POLICY, maxActionsPerHour: 3 } });
+    ctx.predecessor = "agent.testnet";
+    // All three attempts land on the SAME mocked millisecond. A naive
+    // remove-all-matching would free every slot; only the attempt's own
+    // entry may go.
+    for (let i = 0; i < 3; i++) {
+      v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" });
+    }
+    runCallback(v, "Failed", 1);
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).decision).toBe(
+      "ALLOW"
+    );
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).reason).toBe(
+      "RATE_LIMIT"
+    );
+  });
+
+  it("a successful callback keeps the slot consumed", () => {
+    const v = fresh();
+    for (let i = 0; i < 5; i++) {
+      v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" });
+    }
+    runCallback(v, "Successful", 4);
+    // Success settles the spend; the hourly slot stays consumed.
+    expect(v.propose({ receiver: "coffee.testnet", amount: Y(0.1), memo: "" }).reason).toBe(
+      "RATE_LIMIT"
+    );
+  });
+});
+
 describe("ask-then-approve flow", () => {
   it("above ask threshold parks a request without spending", () => {
     const v = fresh();

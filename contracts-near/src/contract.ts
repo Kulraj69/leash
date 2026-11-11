@@ -58,6 +58,9 @@ interface Attempt {
   day: number;
   requestId: number;
   resolved: boolean;
+  // The hourly action-slot timestamp this attempt consumed, so a failed
+  // transfer frees exactly its own entry and never another attempt's.
+  ts: number;
 }
 
 const MINUTES_PER_DAY = 1440;
@@ -122,7 +125,7 @@ export class LeashVault {
     return BigInt(this.spentByDay.get(String(day)) ?? "0");
   }
 
-  private recordSpend(day: number, amount: bigint): void {
+  private recordSpend(day: number, amount: bigint): number {
     this.spentByDay.set(String(day), (this.spentToday(day) + amount).toString());
     const nowMs = Number(near.blockTimestamp() / BigInt(1_000_000));
     const cutoff = nowMs - 3_600_000;
@@ -135,6 +138,7 @@ export class LeashVault {
     while (this.actionTimes.length > 0) this.actionTimes.pop();
     for (const t of kept) this.actionTimes.push(t);
     this.actionTimes.push(nowMs);
+    return nowMs;
   }
 
   private evaluate(
@@ -173,6 +177,7 @@ export class LeashVault {
     requestId: number
   ): void {
     const attemptId = this.nextAttemptId++;
+    const ts = this.recordSpend(day, amount);
     this.attempts.set(String(attemptId), {
       id: attemptId,
       receiver,
@@ -180,8 +185,8 @@ export class LeashVault {
       day,
       requestId,
       resolved: false,
+      ts,
     });
-    this.recordSpend(day, amount);
     this.reserved = (BigInt(this.reserved) + amount).toString();
     // Transfer first, then a self-callback reports the promise outcome.
     // build() attaches the chain eagerly: propose/approve must return the
@@ -245,6 +250,21 @@ export class LeashVault {
     const key = String(attempt!.day);
     const spent = BigInt(this.spentByDay.get(key) ?? "0");
     this.spentByDay.set(key, (spent > value ? spent - value : 0n).toString());
+    // Free exactly this attempt's own hourly action slot - the first entry
+    // matching its recorded timestamp - never every matching entry, so other
+    // attempts landing on the same millisecond keep their slots.
+    const keptTimes: number[] = [];
+    let freed = false;
+    for (let i = 0; i < this.actionTimes.length; i++) {
+      const t = this.actionTimes.get(i) ?? 0;
+      if (!freed && t === attempt!.ts) {
+        freed = true;
+        continue;
+      }
+      keptTimes.push(t);
+    }
+    while (this.actionTimes.length > 0) this.actionTimes.pop();
+    for (const t of keptTimes) this.actionTimes.push(t);
     // A failed attempt returns the request to PENDING so the owner can retry.
     if (reqId > 0) {
       const req = this.requests.get(String(reqId));
